@@ -31,7 +31,7 @@ html, body {
 #root { position: fixed; inset: 0; display: flex; flex-direction: column; }
 .screen { flex: 1; display: flex; flex-direction: column; }
 .hidden { display: none !important; }
- 
+
 .setup { align-items: stretch; justify-content: center; gap: 14px; padding: 32px 22px; max-width: 520px; margin: 0 auto; width: 100%; }
 .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 .brand svg { width: 36px; height: 36px; }
@@ -61,7 +61,7 @@ html, body {
 }
 .btn:active { transform: scale(0.98); }
 .btn.secondary { background: var(--panel); color: var(--fg); border: 1px solid var(--panel-strong); }
- 
+
 .live { padding: 0; position: relative; overflow: hidden; }
 #video-bg {
   position: absolute; inset: 0; width: 100%; height: 100%;
@@ -150,21 +150,21 @@ html, body {
 </head>
 <body>
 <div id="root">
- 
+
   <div id="setup" class="screen setup">
     <div class="brand">
       <svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#000"/><circle cx="22" cy="32" r="10" fill="none" stroke="#00ff88" stroke-width="3"/><circle cx="42" cy="32" r="10" fill="none" stroke="#00ff88" stroke-width="3"/></svg>
       <h1>Glasses</h1>
     </div>
     <p>A hands-free AI assistant that watches what you see and helps you do things &mdash; fix, build, install, troubleshoot.</p>
- 
+
     <label>Gemini API key</label>
     <input id="api-key" type="password" placeholder="paste your key" autocomplete="off" autocapitalize="off" spellcheck="false" />
     <div class="help">Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>. Stored only on this phone.</div>
- 
+
     <label>What do you want help with? <span class="muted">(optional)</span></label>
     <textarea id="task" rows="3" placeholder="e.g. fixing my brake light, assembling an IKEA shelf, troubleshooting my router"></textarea>
- 
+
     <details style="margin-top:4px">
       <summary class="help" style="cursor:pointer">Advanced</summary>
       <div style="margin-top:10px; display:flex; flex-direction:column; gap:10px">
@@ -176,10 +176,10 @@ html, body {
         <input id="rate" type="text" placeholder="1.05" autocomplete="off" autocapitalize="off" spellcheck="false" />
       </div>
     </details>
- 
+
     <button id="continue-btn" class="btn">Continue</button>
   </div>
- 
+
   <div id="live" class="screen live hidden">
     <video id="video-bg" autoplay muted playsinline></video>
     <div class="video-overlay"></div>
@@ -198,13 +198,13 @@ html, body {
     </div>
   </div>
 </div>
- 
+
 <script>
 const STORE_KEY = 'glasses-config-v2';
 const DEFAULTS = { model: 'gemini-2.5-flash', voice: '', rate: '1.05' };
 const config = (function(){ try { return JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch { return {}; } })();
 function saveConfig(c){ Object.assign(config, c); localStorage.setItem(STORE_KEY, JSON.stringify(config)); }
- 
+
 // migrate from v1 once
 try {
   const v1raw = localStorage.getItem('glasses-config-v1');
@@ -213,7 +213,7 @@ try {
     if (v1.apiKey) saveConfig({ apiKey: v1.apiKey, task: v1.task || '' });
   }
 } catch {}
- 
+
 const state = {
   status: 'idle',
   mediaStream: null,
@@ -224,7 +224,7 @@ const state = {
   muted: false,
   wakeLock: null,
 };
- 
+
 const setupEl = document.getElementById('setup');
 const liveEl = document.getElementById('live');
 const apiKeyInput = document.getElementById('api-key');
@@ -239,13 +239,13 @@ const settingsBtn = document.getElementById('settings-btn');
 const statusDot = document.getElementById('status-dot');
 const statusText = document.getElementById('status-text');
 let transcriptEl = document.getElementById('transcript');
- 
+
 apiKeyInput.value = config.apiKey || '';
 taskInput.value = config.task || '';
 modelInput.value = config.model || '';
 voiceInput.value = config.voice || '';
 rateInput.value = config.rate || '';
- 
+
 continueBtn.addEventListener('click', () => {
   const apiKey = apiKeyInput.value.trim();
   if (!apiKey) { apiKeyInput.focus(); return; }
@@ -258,21 +258,24 @@ continueBtn.addEventListener('click', () => {
   });
   goLive();
 });
- 
+
 if (config.apiKey) goLive();
- 
+
 async function goLive() {
   setupEl.classList.add('hidden');
   liveEl.classList.remove('hidden');
- 
+
   const isLocalhost = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
   if (!window.isSecureContext && !isLocalhost) { showInsecureContextHelp(); return; }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { setStatus('error', 'Browser has no getUserMedia'); return; }
- 
+
   try {
+    // IMPORTANT: do NOT request audio here. SpeechRecognition needs exclusive
+    // access to the microphone on Android Chrome; if getUserMedia is also
+    // holding the mic, recognition silently receives no audio.
     state.mediaStream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      audio: false,
     });
     state.videoEl.srcObject = state.mediaStream;
     setStatus('idle', 'Tap start when ready');
@@ -285,7 +288,7 @@ async function goLive() {
     else setStatus('error', 'Camera/mic error: ' + (err.message || err));
   }
 }
- 
+
 function showInsecureContextHelp() {
   setStatus('error', 'Page must be served over HTTPS');
   const help = document.createElement('div');
@@ -300,7 +303,7 @@ function showInsecureContextHelp() {
   transcriptEl.replaceWith(help);
   transcriptEl = help;
 }
- 
+
 settingsBtn.addEventListener('click', () => {
   stopSession();
   releaseCamera();
@@ -312,18 +315,18 @@ settingsBtn.addEventListener('click', () => {
   voiceInput.value = config.voice || '';
   rateInput.value = config.rate || '';
 });
- 
+
 startBtn.addEventListener('click', () => {
   if (state.status === 'idle' || state.status === 'error') startSession();
   else stopSession();
 });
- 
+
 muteBtn.addEventListener('click', () => {
   state.muted = !state.muted;
   muteBtn.innerHTML = state.muted ? '&#128263;' : '&#128266;';
   if (state.muted && 'speechSynthesis' in window) window.speechSynthesis.cancel();
 });
- 
+
 function setStatus(s, text) {
   state.status = s;
   statusDot.className = 'dot ' + (s === 'idle' ? '' : s);
@@ -336,7 +339,7 @@ function setStatus(s, text) {
     startBtn.classList.add('stop');
   }
 }
- 
+
 const MAX_TURNS_DISPLAY = 12;
 function appendTranscript(who, text, partial=false) {
   const last = transcriptEl.lastElementChild;
@@ -361,9 +364,9 @@ function appendTranscript(who, text, partial=false) {
   while (transcriptEl.children.length > MAX_TURNS_DISPLAY) transcriptEl.removeChild(transcriptEl.firstChild);
   transcriptEl.scrollTop = transcriptEl.scrollHeight;
 }
- 
+
 const SYSTEM_PROMPT_BASE = `You are a hands-free AI assistant the user is wearing as smart glasses. You see what they see (a snapshot of the camera at the moment they spoke) and you hear what they say. You speak back through their phone speaker or headphones. Help them complete physical tasks: repairs, assembly, installation, troubleshooting, identification, cooking, anything hands-on.
- 
+
 Style:
 - Speak in short, calm, direct sentences. Like a coach standing next to them.
 - Identify objects specifically when asked: brand, model, part number, version. Read labels if you can see them.
@@ -372,13 +375,13 @@ Style:
 - Don't narrate the obvious. Don't describe what they're already doing. Add value.
 - If you can't see well, ask them to move closer or change angle.
 - Keep responses under ~30 words unless they explicitly ask for detail. Spoken-style English.
- 
+
 Each user message includes one image: that's what they're looking at right now.`;
- 
+
 function systemPromptText() {
   return SYSTEM_PROMPT_BASE + (config.task ? `\n\nThe user told you up front they want help with: "${config.task}". Use this as starting context.` : '');
 }
- 
+
 // ============================================================
 // Speech Recognition (browser STT)
 // ============================================================
@@ -389,7 +392,7 @@ function initRecognition() {
   r.continuous = true;
   r.interimResults = true;
   r.lang = 'en-US';
- 
+
   r.onresult = (e) => {
     let interim = '';
     let finalText = '';
@@ -405,47 +408,54 @@ function initRecognition() {
       appendTranscript('you', interim.trim(), true);
     }
   };
- 
+
   r.onspeechstart = () => {
     // user starts talking — interrupt the assistant
     if (state.status === 'speaking' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
   };
- 
+
   r.onerror = (e) => {
-    if (e.error === 'no-speech' || e.error === 'aborted' || e.error === 'audio-capture') return;
+    console.warn('SR error', e.error);
+    if (e.error === 'no-speech' || e.error === 'aborted') return;
     if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
       setStatus('error', 'Mic permission denied for speech recognition');
       state.recognitionWantOn = false;
+    } else if (e.error === 'audio-capture') {
+      setStatus('error', 'Mic is busy - close other apps using the microphone, then try again');
+    } else if (e.error === 'network') {
+      setStatus('error', 'Network error - speech recognition needs internet');
+    } else if (e.error === 'language-not-supported') {
+      setStatus('error', 'Language not supported on this device');
     } else {
-      console.warn('SR error', e.error);
+      setStatus('error', 'Speech error: ' + e.error);
     }
   };
- 
+
   r.onend = () => {
     if (state.recognitionWantOn) {
       // Restart after a short delay; Chrome on Android stops on silence
       setTimeout(() => { if (state.recognitionWantOn) { try { r.start(); } catch {} } }, 200);
     }
   };
- 
+
   state.recognition = r;
   return true;
 }
- 
+
 function startListening() {
   state.recognitionWantOn = true;
   if (!state.recognition) { if (!initRecognition()) return; }
   setStatus('listening', 'Listening');
   try { state.recognition.start(); } catch {}
 }
- 
+
 function pauseListening() {
   state.recognitionWantOn = false;
   if (state.recognition) { try { state.recognition.stop(); } catch {} }
 }
- 
+
 // ============================================================
 // Session lifecycle
 // ============================================================
@@ -453,10 +463,10 @@ function startSession() {
   if (!state.mediaStream) { setStatus('error', 'Camera/mic not ready'); return; }
   state.conversation = [];
   transcriptEl.innerHTML = '';
- 
+
   // Wake lock
   (async () => { try { if ('wakeLock' in navigator) state.wakeLock = await navigator.wakeLock.request('screen'); } catch {} })();
- 
+
   // "Prime" speech synthesis with an empty utterance so Android allows it later
   if ('speechSynthesis' in window) {
     try {
@@ -464,17 +474,17 @@ function startSession() {
       window.speechSynthesis.speak(u);
     } catch {}
   }
- 
+
   startListening();
 }
- 
+
 function stopSession() {
   pauseListening();
   if ('speechSynthesis' in window) window.speechSynthesis.cancel();
   if (state.wakeLock) { try { state.wakeLock.release(); } catch {} state.wakeLock = null; }
   setStatus('idle', 'Tap start when ready');
 }
- 
+
 function releaseCamera() {
   if (state.mediaStream) {
     state.mediaStream.getTracks().forEach(t => { try { t.stop(); } catch {} });
@@ -482,7 +492,7 @@ function releaseCamera() {
     state.videoEl.srcObject = null;
   }
 }
- 
+
 // ============================================================
 // One turn: user said X -> capture frame -> ask Gemini -> speak
 // ============================================================
@@ -491,14 +501,14 @@ async function onUserSaid(text) {
   if (!text || state.status === 'thinking') return;
   pauseListening();
   setStatus('thinking', 'Thinking...');
- 
+
   const frame = captureFrame();
   const userParts = [{ text }];
   if (frame) userParts.push({ inline_data: { mime_type: 'image/jpeg', data: frame } });
   state.conversation.push({ role: 'user', parts: userParts });
   // trim history
   while (state.conversation.length > MAX_HISTORY * 2) state.conversation.shift();
- 
+
   try {
     const reply = await callGemini();
     if (!reply) {
@@ -515,7 +525,7 @@ async function onUserSaid(text) {
     setTimeout(() => { if (state.status === 'error') startListening(); }, 2500);
   }
 }
- 
+
 async function callGemini() {
   const model = (config.model || DEFAULTS.model).replace(/^models\//, '');
   // Strip out images from older turns to keep payload reasonable
@@ -553,14 +563,14 @@ async function callGemini() {
   }
   return extractText(JSON.parse(t));
 }
- 
+
 function extractText(data) {
   const cand = data && data.candidates && data.candidates[0];
   if (!cand) return '';
   const parts = (cand.content && cand.content.parts) || [];
   return parts.map(p => p.text || '').filter(Boolean).join(' ').trim();
 }
- 
+
 // ============================================================
 // TTS playback
 // ============================================================
@@ -577,7 +587,7 @@ function pickVoice() {
       || all[0]
       || null;
 }
- 
+
 function speak(text) {
   if (state.muted || !('speechSynthesis' in window)) {
     setStatus('listening', 'Listening');
@@ -607,12 +617,12 @@ function speak(text) {
   // Some browsers (Android Chrome) need this kick when the page hasn't fully loaded voices yet
   setTimeout(() => window.speechSynthesis.speak(u), 50);
 }
- 
+
 // Voices may load asynchronously; force a refresh
 if ('speechSynthesis' in window) {
   window.speechSynthesis.onvoiceschanged = () => { /* voices ready */ };
 }
- 
+
 // ============================================================
 // Frame capture
 // ============================================================
@@ -631,7 +641,7 @@ function captureFrame() {
   frameCtx.drawImage(state.videoEl, 0, 0, W, H);
   return frameCanvas.toDataURL('image/jpeg', 0.7).split(',')[1];
 }
- 
+
 // ============================================================
 // Lifecycle housekeeping
 // ============================================================
@@ -644,7 +654,7 @@ document.addEventListener('visibilitychange', async () => {
     } catch {}
   }
 });
- 
+
 window.addEventListener('beforeunload', () => { stopSession(); releaseCamera(); });
 </script>
 </body>
