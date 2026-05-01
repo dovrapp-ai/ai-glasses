@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<meta name="theme-color" content="#000000" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<title>Glasses</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23000'/%3E%3Ccircle cx='22' cy='32' r='10' fill='none' stroke='%2300ff88' stroke-width='3'/%3E%3Ccircle cx='42' cy='32' r='10' fill='none' stroke='%2300ff88' stroke-width='3'/%3E%3Cpath d='M32 32h0' stroke='%2300ff88' stroke-width='3'/%3E%3C/svg%3E" />
+<style>
+:root {
+  --bg: #000;
+  --fg: #fff;
+  --accent: #00ff88;
+  --error: #ff3355;
+  --muted: #888;
+  --panel: rgba(255,255,255,0.06);
+  --panel-strong: rgba(255,255,255,0.14);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--bg); color: var(--fg);
+  font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+  overscroll-behavior: none;
+  height: 100%;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#root { position: fixed; inset: 0; display: flex; flex-direction: column; }
+.screen { flex: 1; display: flex; flex-direction: column; }
+.hidden { display: none !important; }
+
+.setup {
+  align-items: stretch; justify-content: center;
+  gap: 14px; padding: 32px 22px;
+  max-width: 520px; margin: 0 auto; width: 100%;
+}
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.brand svg { width: 36px; height: 36px; }
+.brand h1 { margin: 0; font-size: 26px; letter-spacing: -0.5px; }
+.setup p { color: var(--muted); margin: 0 0 12px; line-height: 1.5; font-size: 15px; }
+.setup label { font-size: 13px; color: var(--muted); margin-bottom: -8px; }
+.setup input, .setup textarea {
+  background: var(--panel);
+  border: 1px solid var(--panel-strong);
+  color: var(--fg);
+  padding: 14px 16px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-family: inherit;
+  outline: none;
+  width: 100%;
+  resize: none;
+}
+.setup input:focus, .setup textarea:focus { border-color: var(--accent); }
+.help { font-size: 13px; color: var(--muted); margin-top: -6px; line-height: 1.5; }
+.help a { color: var(--accent); text-decoration: none; }
+.btn {
+  background: var(--accent); color: #000;
+  border: none; padding: 16px 24px; border-radius: 12px;
+  font-size: 17px; font-weight: 600; cursor: pointer;
+  font-family: inherit; width: 100%; margin-top: 8px;
+}
+.btn:active { transform: scale(0.98); }
+.btn.secondary { background: var(--panel); color: var(--fg); border: 1px solid var(--panel-strong); }
+
+.live { padding: 0; position: relative; overflow: hidden; }
+#video-bg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; z-index: 0;
+}
+.video-overlay {
+  position: absolute; inset: 0; z-index: 1;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 25%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.85) 100%);
+  pointer-events: none;
+}
+.live-content {
+  position: relative; z-index: 2;
+  flex: 1; display: flex; flex-direction: column;
+  padding: 16px;
+  padding-top: max(16px, env(safe-area-inset-top));
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
+}
+.status-bar {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(0,0,0,0.55);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  padding: 10px 16px;
+  border-radius: 999px;
+  align-self: flex-start;
+  font-size: 14px;
+  max-width: calc(100% - 8px);
+}
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+.dot.listening { background: var(--accent); animation: pulse 1.6s infinite; }
+.dot.thinking { background: #ffaa00; animation: pulse 1s infinite; }
+.dot.speaking { background: #00aaff; animation: pulse 0.8s infinite; }
+.dot.connecting { background: #ffaa00; animation: pulse 0.6s infinite; }
+.dot.error { background: var(--error); }
+@keyframes pulse {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(1.5); }
+}
+.spacer { flex: 1; }
+.transcript {
+  background: rgba(0,0,0,0.6);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  font-size: 15px;
+  line-height: 1.45;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.transcript:empty { display: none; }
+.transcript .turn { margin-bottom: 12px; }
+.transcript .turn:last-child { margin-bottom: 0; }
+.transcript .who {
+  font-size: 11px; color: var(--muted);
+  margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.6px;
+}
+.transcript .turn[data-who="assistant"] .who { color: var(--accent); }
+.transcript b { color: var(--fg); }
+.controls { display: flex; gap: 14px; align-items: center; justify-content: center; }
+.iconbtn {
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.6);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--panel-strong);
+  color: var(--fg);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; cursor: pointer;
+  font-family: inherit;
+}
+.iconbtn:active { transform: scale(0.94); }
+.bigbtn {
+  width: 88px; height: 88px;
+  border-radius: 50%;
+  background: var(--accent); color: #000;
+  border: none;
+  font-size: 16px; font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 32px rgba(0,255,136,0.35);
+  font-family: inherit;
+}
+.bigbtn.stop { background: var(--error); color: #fff; box-shadow: 0 8px 32px rgba(255,51,85,0.35); }
+.bigbtn:active { transform: scale(0.94); }
+.muted { color: var(--muted); }
+</style>
+</head>
+<body>
+<div id="root">
+
+  <div id="setup" class="screen setup">
+    <div class="brand">
+      <svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#000"/><circle cx="22" cy="32" r="10" fill="none" stroke="#00ff88" stroke-width="3"/><circle cx="42" cy="32" r="10" fill="none" stroke="#00ff88" stroke-width="3"/></svg>
+      <h1>Glasses</h1>
+    </div>
+    <p>A hands-free AI assistant that watches what you see and helps you do things &mdash; fix, build, install, troubleshoot.</p>
+
+    <label>Gemini API key</label>
+    <input id="api-key" type="password" placeholder="paste your key" autocomplete="off" autocapitalize="off" spellcheck="false" />
+    <div class="help">Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>. Stored only on this phone.</div>
+
+    <label>What do you want help with? <span class="muted">(optional)</span></label>
+    <textarea id="task" rows="3" placeholder="e.g. fixing my brake light, assembling an IKEA shelf, troubleshooting my router"></textarea>
+
+    <details style="margin-top:4px">
+      <summary class="help" style="cursor:pointer">Advanced</summary>
+      <div style="margin-top:10px; display:flex; flex-direction:column; gap:10px">
+        <label>Model</label>
+        <input id="model" type="text" placeholder="gemini-2.0-flash-live-001" autocomplete="off" autocapitalize="off" spellcheck="false" />
+        <label>Voice</label>
+        <input id="voice" type="text" placeholder="Puck" autocomplete="off" autocapitalize="off" spellcheck="false" />
+      </div>
+    </details>
+
+    <button id="continue-btn" class="btn">Continue</button>
+  </div>
+
+  <div id="live" class="screen live hidden">
+    <video id="video-bg" autoplay muted playsinline></video>
+    <div class="video-overlay"></div>
+    <div class="live-content">
+      <div class="status-bar">
+        <span id="status-dot" class="dot"></span>
+        <span id="status-text">Tap start when ready</span>
+      </div>
+      <div class="spacer"></div>
+      <div id="transcript" class="transcript"></div>
+      <div class="controls">
+        <button id="settings-btn" class="iconbtn" aria-label="Settings">&#9881;</button>
+        <button id="start-btn" class="bigbtn">Start</button>
+        <button id="mute-btn" class="iconbtn" aria-label="Mute speaker">&#128266;</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const STORE_KEY = 'glasses-config-v1';
+const DEFAULTS = { model: 'gemini-2.0-flash-live-001', voice: 'Puck' };
+const config = (function(){ try { return JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch { return {}; } })();
+function saveConfig(c){ Object.assign(config, c); localStorage.setItem(STORE_KEY, JSON.stringify(config)); }
+
+const state = {
+  status: 'idle',
+  ws: null,
+  mediaStream: null,
+  audioCtxIn: null,
+  audioCtxOut: null,
+  audioWorklet: null,
+  videoEl: document.getElementById('video-bg'),
+  frameTimer: null,
+  audioQueue: [],
+  audioPlaying: false,
+  muted: false,
+  currentUserText: '',
+  currentModelText: '',
+  wakeLock: null,
+};
+
+const setupEl = document.getElementById('setup');
+const liveEl = document.getElementById('live');
+const apiKeyInput = document.getElementById('api-key');
+const taskInput = document.getElementById('task');
+const modelInput = document.getElementById('model');
+const voiceInput = document.getElementById('voice');
+const continueBtn = document.getElementById('continue-btn');
+const startBtn = document.getElementById('start-btn');
+const muteBtn = document.getElementById('mute-btn');
+const settingsBtn = document.getElementById('settings-btn');
+const statusDot = document.getElementById('status-dot');
+const statusText = document.getElementById('status-text');
+let transcriptEl = document.getElementById('transcript');
+
+apiKeyInput.value = config.apiKey || '';
+taskInput.value = config.task || '';
+modelInput.value = config.model || '';
+voiceInput.value = config.voice || '';
+
+continueBtn.addEventListener('click', () => {
+  const apiKey = apiKeyInput.value.trim();
+  if (!apiKey) { apiKeyInput.focus(); return; }
+  saveConfig({
+    apiKey,
+    task: taskInput.value.trim(),
+    model: modelInput.value.trim() || DEFAULTS.model,
+    voice: voiceInput.value.trim() || DEFAULTS.voice,
+  });
+  goLive();
+});
+
+if (config.apiKey) goLive();
+
+async function goLive() {
+  setupEl.classList.add('hidden');
+  liveEl.classList.remove('hidden');
+
+  // Browsers only allow camera and mic on HTTPS or localhost.
+  // file:// and content:// origins are NOT secure contexts; getUserMedia silently fails there.
+  const isLocalhost = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+  if (!window.isSecureContext && !isLocalhost) {
+    showInsecureContextHelp();
+    return;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    setStatus('error', 'Browser has no getUserMedia');
+    return;
+  }
+
+  try {
+    state.mediaStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
+    state.videoEl.srcObject = state.mediaStream;
+    setStatus('idle', 'Tap start when ready');
+  } catch (err) {
+    const name = err && err.name;
+    if (name === 'NotAllowedError' || name === 'SecurityError' || name === 'PermissionDeniedError') {
+      if (!window.isSecureContext && !isLocalhost) showInsecureContextHelp();
+      else setStatus('error', 'Permission denied. Check Chrome site settings.');
+    } else if (name === 'NotFoundError') {
+      setStatus('error', 'No camera or microphone found on this device');
+    } else {
+      setStatus('error', 'Camera/mic error: ' + (err.message || err));
+    }
+  }
+}
+
+function showInsecureContextHelp() {
+  setStatus('error', 'Page must be served over HTTPS');
+  const help = document.createElement('div');
+  help.id = 'transcript';
+  help.className = 'transcript';
+  help.style.maxHeight = 'none';
+  help.innerHTML =
+    '<div class="turn"><div class="who" style="color:#ff3355">Why this won\u2019t work yet</div>' +
+    '<div class="text">Chrome only allows camera and microphone access on <b>HTTPS</b> pages. You opened this file via <b>' + (location.protocol || 'a non-https URL') + '</b>, which Chrome treats as insecure, so it silently blocks getUserMedia.</div></div>' +
+    '<div class="turn"><div class="who" style="color:#00ff88">Fix in 30 seconds</div>' +
+    '<div class="text">1. On your computer, open <b>app.netlify.com/drop</b><br>' +
+    '2. Drag <b>glasses.html</b> onto the page<br>' +
+    '3. Open the resulting <b>https://&hellip;.netlify.app/glasses.html</b> URL on this phone<br>' +
+    '4. Chrome will then prompt for camera and mic &mdash; tap Allow.</div></div>';
+  transcriptEl.replaceWith(help);
+  transcriptEl = help;
+}
+
+settingsBtn.addEventListener('click', () => {
+  if (state.ws) stopSession();
+  releaseCamera();
+  liveEl.classList.add('hidden');
+  setupEl.classList.remove('hidden');
+  apiKeyInput.value = config.apiKey || '';
+  taskInput.value = config.task || '';
+  modelInput.value = config.model || '';
+  voiceInput.value = config.voice || '';
+});
+
+startBtn.addEventListener('click', () => {
+  if (state.status === 'idle' || state.status === 'error') startSession();
+  else stopSession();
+});
+
+muteBtn.addEventListener('click', () => {
+  state.muted = !state.muted;
+  muteBtn.innerHTML = state.muted ? '&#128263;' : '&#128266;';
+  if (state.muted) state.audioQueue = [];
+});
+
+function setStatus(s, text) {
+  state.status = s;
+  statusDot.className = 'dot ' + (s === 'idle' ? '' : s);
+  statusText.textContent = text || s;
+  if (s === 'idle' || s === 'error') {
+    startBtn.textContent = 'Start';
+    startBtn.classList.remove('stop');
+  } else {
+    startBtn.textContent = 'Stop';
+    startBtn.classList.add('stop');
+  }
+}
+
+const MAX_TURNS = 12;
+function appendTranscript(who, text, partial=false) {
+  const last = transcriptEl.lastElementChild;
+  if (last && last.dataset.who === who && last.dataset.partial === '1') {
+    last.querySelector('.text').textContent = text;
+    if (!partial) last.dataset.partial = '0';
+  } else {
+    const turn = document.createElement('div');
+    turn.className = 'turn';
+    turn.dataset.who = who;
+    turn.dataset.partial = partial ? '1' : '0';
+    const whoEl = document.createElement('div');
+    whoEl.className = 'who';
+    whoEl.textContent = who === 'you' ? 'You' : 'Assistant';
+    const textEl = document.createElement('div');
+    textEl.className = 'text';
+    textEl.textContent = text;
+    turn.appendChild(whoEl);
+    turn.appendChild(textEl);
+    transcriptEl.appendChild(turn);
+  }
+  while (transcriptEl.children.length > MAX_TURNS) transcriptEl.removeChild(transcriptEl.firstChild);
+  transcriptEl.scrollTop = transcriptEl.scrollHeight;
+}
+
+const WS_URL = key =>
+  `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${encodeURIComponent(key)}`;
+
+const SYSTEM_PROMPT_BASE = `You are a hands-free real-time visual coach worn by the user as smart glasses. You see what they see (live video at ~1 fps) and hear what they say (live mic). You speak back through their headphones or phone speaker. Your job is to help them complete physical tasks: repairs, assembly, installation, troubleshooting, cooking, anything hands-on.
+
+Coaching style:
+- Speak in short, calm, direct sentences. Like a coach standing next to them.
+- Be PROACTIVE. If you see them about to make a mistake, pick up the wrong tool/part, install something backwards, or skip a step, interrupt and correct them. Do not wait to be asked.
+- Be QUIET when they are working correctly. Silence is fine. Only speak when you have something useful to add.
+- Go step by step. After each step is finished, give the next step. One step at a time.
+- Identify objects specifically when asked: brand, model, part number, version. Read labels if you can see them.
+- Use Google Search whenever you need real specifics: torque values, manuals, part numbers, error codes, recipe steps, model differences.
+- Confirm progress briefly: "good, that's it" / "yep, right one" / "tighten a bit more".
+- Do not narrate the obvious back to the user. Do not describe what they are already doing. Add value.
+- If you cannot see well, ask them to move closer or change angle.
+- Keep spoken responses under ~25 words unless they ask for detail.
+
+Begin by listening. Speak only when you have something useful to say.`;
+
+async function startSession() {
+  if (!state.mediaStream) { setStatus('error', 'Camera/mic not ready'); return; }
+  setStatus('connecting', 'Connecting...');
+  transcriptEl.innerHTML = '';
+
+  ensureAudioCtxOut();
+  if (state.audioCtxOut.state === 'suspended') {
+    try { await state.audioCtxOut.resume(); } catch {}
+  }
+
+  try {
+    if ('wakeLock' in navigator) state.wakeLock = await navigator.wakeLock.request('screen');
+  } catch {}
+
+  const ws = new WebSocket(WS_URL(config.apiKey));
+  ws.binaryType = 'arraybuffer';
+  state.ws = ws;
+
+  ws.onopen = () => {
+    const sysText = SYSTEM_PROMPT_BASE +
+      (config.task ? `\n\nThe user told you up front they want help with: "${config.task}". Use this as the starting context.` : '');
+    const setup = {
+      setup: {
+        model: 'models/' + (config.model || DEFAULTS.model),
+        generationConfig: {
+          responseModalities: ['AUDIO'],
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voice || DEFAULTS.voice } } },
+        },
+        systemInstruction: { parts: [{ text: sysText }] },
+        tools: [{ googleSearch: {} }],
+        inputAudioTranscription: {},
+        outputAudioTranscription: {},
+      }
+    };
+    ws.send(JSON.stringify(setup));
+  };
+
+  ws.onmessage = async (e) => {
+    let msg;
+    try {
+      if (e.data instanceof ArrayBuffer) msg = JSON.parse(new TextDecoder().decode(e.data));
+      else if (e.data instanceof Blob) msg = JSON.parse(await e.data.text());
+      else msg = JSON.parse(e.data);
+    } catch (err) { console.error('parse', err); return; }
+    handleServerMessage(msg);
+  };
+
+  ws.onerror = (e) => { console.error('WS error', e); setStatus('error', 'Connection error'); };
+  ws.onclose = (e) => {
+    if (state.status !== 'idle' && state.status !== 'error') {
+      setStatus('idle', e.reason ? 'Disconnected: ' + e.reason : 'Disconnected');
+    }
+    cleanupStreaming();
+  };
+}
+
+function handleServerMessage(msg) {
+  if (msg.setupComplete) { setStatus('listening', 'Listening'); startStreaming(); return; }
+  if (msg.serverContent) {
+    const sc = msg.serverContent;
+    if (sc.inputTranscription && sc.inputTranscription.text) {
+      state.currentUserText += sc.inputTranscription.text;
+      appendTranscript('you', state.currentUserText, true);
+    }
+    if (sc.outputTranscription && sc.outputTranscription.text) {
+      state.currentModelText += sc.outputTranscription.text;
+      appendTranscript('assistant', state.currentModelText, true);
+    }
+    if (sc.modelTurn && sc.modelTurn.parts) {
+      for (const p of sc.modelTurn.parts) {
+        if (p.inlineData && p.inlineData.mimeType && p.inlineData.mimeType.startsWith('audio/pcm')) {
+          enqueueAudio(p.inlineData.data);
+          if (state.status !== 'speaking') setStatus('speaking', 'Speaking');
+        }
+      }
+    }
+    if (sc.interrupted) { state.audioQueue = []; state.currentModelText = ''; }
+    if (sc.turnComplete) {
+      Array.from(transcriptEl.children).forEach(t => t.dataset.partial = '0');
+      state.currentUserText = '';
+      state.currentModelText = '';
+    }
+  }
+}
+
+const WORKLET_CODE = `
+class PCMSender extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.targetRate = 16000;
+    this.ratio = sampleRate / this.targetRate;
+    this.buf = [];
+    this.bufLen = 0;
+    this.chunkSize = 1600;
+  }
+  process(inputs) {
+    const ch = inputs[0] && inputs[0][0];
+    if (!ch) return true;
+    const outLen = Math.floor(ch.length / this.ratio);
+    const out = new Float32Array(outLen);
+    for (let i = 0; i < outLen; i++) {
+      const srcIdx = i * this.ratio;
+      const i0 = Math.floor(srcIdx);
+      const i1 = Math.min(i0 + 1, ch.length - 1);
+      const frac = srcIdx - i0;
+      out[i] = ch[i0] * (1 - frac) + ch[i1] * frac;
+    }
+    this.buf.push(out);
+    this.bufLen += outLen;
+    while (this.bufLen >= this.chunkSize) {
+      const chunk = new Int16Array(this.chunkSize);
+      let needed = this.chunkSize;
+      let writeIdx = 0;
+      while (needed > 0) {
+        const head = this.buf[0];
+        const take = Math.min(head.length, needed);
+        for (let i = 0; i < take; i++) {
+          const s = Math.max(-1, Math.min(1, head[i]));
+          chunk[writeIdx++] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+        if (take === head.length) this.buf.shift();
+        else this.buf[0] = head.subarray(take);
+        needed -= take;
+      }
+      this.bufLen -= this.chunkSize;
+      this.port.postMessage(chunk.buffer, [chunk.buffer]);
+    }
+    return true;
+  }
+}
+registerProcessor('pcm-sender', PCMSender);
+`;
+
+async function startStreaming() {
+  const audioTrack = state.mediaStream.getAudioTracks()[0];
+  if (audioTrack) {
+    const audioStream = new MediaStream([audioTrack]);
+    state.audioCtxIn = new (window.AudioContext || window.webkitAudioContext)();
+    const blob = new Blob([WORKLET_CODE], { type: 'application/javascript' });
+    const url = URL.createObjectURL(blob);
+    await state.audioCtxIn.audioWorklet.addModule(url);
+    URL.revokeObjectURL(url);
+    const src = state.audioCtxIn.createMediaStreamSource(audioStream);
+    const node = new AudioWorkletNode(state.audioCtxIn, 'pcm-sender');
+    node.port.onmessage = (e) => sendAudioChunk(e.data);
+    src.connect(node);
+    state.audioWorklet = node;
+  }
+  state.frameTimer = setInterval(captureAndSendFrame, 1000);
+}
+
+function sendAudioChunk(arrayBuffer) {
+  if (!state.ws || state.ws.readyState !== 1) return;
+  if (state.status === 'speaking') return; // half-duplex gate to avoid hearing our own voice
+  const b64 = arrayBufferToBase64(arrayBuffer);
+  state.ws.send(JSON.stringify({
+    realtimeInput: { mediaChunks: [{ mimeType: 'audio/pcm;rate=16000', data: b64 }] }
+  }));
+}
+
+let frameCanvas = null, frameCtx = null;
+function captureAndSendFrame() {
+  if (!state.ws || state.ws.readyState !== 1) return;
+  if (!state.videoEl.videoWidth) return;
+  const W = 640;
+  const H = Math.round(state.videoEl.videoHeight * (W / state.videoEl.videoWidth));
+  if (!frameCanvas) {
+    frameCanvas = document.createElement('canvas');
+    frameCtx = frameCanvas.getContext('2d');
+  }
+  if (frameCanvas.width !== W || frameCanvas.height !== H) {
+    frameCanvas.width = W; frameCanvas.height = H;
+  }
+  frameCtx.drawImage(state.videoEl, 0, 0, W, H);
+  const dataUrl = frameCanvas.toDataURL('image/jpeg', 0.6);
+  const b64 = dataUrl.split(',')[1];
+  state.ws.send(JSON.stringify({
+    realtimeInput: { mediaChunks: [{ mimeType: 'image/jpeg', data: b64 }] }
+  }));
+}
+
+function ensureAudioCtxOut() {
+  if (!state.audioCtxOut) {
+    state.audioCtxOut = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+  }
+}
+
+function enqueueAudio(b64) {
+  if (state.muted) return;
+  ensureAudioCtxOut();
+  const bytes = base64ToArrayBuffer(b64);
+  const i16 = new Int16Array(bytes);
+  const f32 = new Float32Array(i16.length);
+  for (let i = 0; i < i16.length; i++) f32[i] = i16[i] / 0x8000;
+  const buf = state.audioCtxOut.createBuffer(1, f32.length, 24000);
+  buf.copyToChannel(f32, 0);
+  state.audioQueue.push(buf);
+  if (!state.audioPlaying) playNextAudio();
+}
+
+function playNextAudio() {
+  if (state.audioQueue.length === 0) {
+    state.audioPlaying = false;
+    if (state.status === 'speaking') setStatus('listening', 'Listening');
+    return;
+  }
+  state.audioPlaying = true;
+  const buf = state.audioQueue.shift();
+  const src = state.audioCtxOut.createBufferSource();
+  src.buffer = buf;
+  src.connect(state.audioCtxOut.destination);
+  src.onended = playNextAudio;
+  src.start();
+}
+
+function arrayBufferToBase64(buf) {
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
+function base64ToArrayBuffer(b64) {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
+function stopSession() {
+  if (state.ws) { try { state.ws.close(); } catch {} state.ws = null; }
+  cleanupStreaming();
+  setStatus('idle', 'Tap start when ready');
+}
+
+function cleanupStreaming() {
+  if (state.frameTimer) { clearInterval(state.frameTimer); state.frameTimer = null; }
+  if (state.audioWorklet) { try { state.audioWorklet.disconnect(); } catch {} state.audioWorklet = null; }
+  if (state.audioCtxIn) { try { state.audioCtxIn.close(); } catch {} state.audioCtxIn = null; }
+  state.audioQueue = [];
+  state.audioPlaying = false;
+  if (state.wakeLock) { try { state.wakeLock.release(); } catch {} state.wakeLock = null; }
+}
+
+function releaseCamera() {
+  if (state.mediaStream) {
+    state.mediaStream.getTracks().forEach(t => { try { t.stop(); } catch {} });
+    state.mediaStream = null;
+    state.videoEl.srcObject = null;
+  }
+}
+
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible' && state.status !== 'idle' && state.status !== 'error') {
+    try {
+      if ('wakeLock' in navigator && !state.wakeLock) {
+        state.wakeLock = await navigator.wakeLock.request('screen');
+      }
+    } catch {}
+  }
+});
+
+window.addEventListener('beforeunload', () => { stopSession(); releaseCamera(); });
+</script>
+</body>
+</html>
